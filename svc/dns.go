@@ -93,28 +93,6 @@ func (s *DNSService) filterDomin(domain string) bool {
 	return match.DomainMatch(domain, s.opt.whitelistMap)
 }
 
-func (s *DNSService) checkAnswers_bak(searchType string, question dnsmessage.Question, answers []dnsmessage.Resource) {
-	for _, answer := range answers {
-		switch t := answer.Body.(type) {
-		case *dnsmessage.AResource:
-			body := answer.Body.(*dnsmessage.AResource)
-			log.Debugf("ARSerouce response, question=%v answer=%v", question.Name.String(), body.GoString())
-		case *dnsmessage.PTRResource:
-			body := answer.Body.(*dnsmessage.PTRResource)
-			log.Debugf("PTRResource response, question=%+v answer=%v", question.Name.String(), body.PTR.GoString())
-			if s.filterDomin(body.PTR.String()) {
-				fmt.Fprint(os.Stdout, body.PTR.String()+"\n")
-				if err := s.opt.ptrHookAction([]string{body.PTR.String()}); err != nil {
-					log.Error(err)
-				}
-			}
-		default:
-			log.Debugf("not support this type, dnsmessageType=%+v", t)
-		}
-	}
-
-}
-
 func printByteSlice(b []byte) string {
 	if len(b) == 0 {
 		return ""
@@ -138,77 +116,6 @@ func printUint8Bytes(buf []byte, i uint8) []byte {
 	return append(buf, b%10+'0')
 }
 
-func (s *DNSService) checkAnswers(searchType string, question dnsmessage.Question, answers []dnsmessage.Resource) {
-
-	var ans []string
-	if len(answers) > 0 {
-		answer := answers[0]
-		switch t := answer.Body.(type) {
-		case *dnsmessage.AResource:
-			body := answer.Body.(*dnsmessage.AResource)
-			log.Debugf("ARSource response, question=%v answer=%v", question.Name.String(), printByteSlice(body.A[:]))
-			if s.filterDomin(printByteSlice(body.A[:])) {
-				for _, v := range answers {
-					body = v.Body.(*dnsmessage.AResource)
-					ans = append(ans, printByteSlice(body.A[:]))
-				}
-				if len(ans) > 0 {
-					wlog.Debugf("ARSource PutWgvpnResource, question=%v answer=%v", question.Name.String(), ans)
-					err := s.opt.aHookAction(ans)
-					if err != nil {
-						log.Errorf("ARSourcehookaction PutWgvpnResource error, question=%v,ans=%v,err=%v", question.Name.String(), ans, err)
-					}
-				}
-			} else {
-				blog.Debugf("ARSerouce response, question=%v answer=%v", question.Name.String(), body.GoString())
-			}
-		case *dnsmessage.PTRResource:
-			body := answer.Body.(*dnsmessage.PTRResource)
-			log.Debugf("PTRResource response, question=%+v answer=%v", question.Name.String(), body.PTR.GoString())
-			if s.filterDomin(body.PTR.String()) {
-				fmt.Fprint(os.Stdout, body.PTR.String()+"\n")
-				for _, v := range answers {
-					body = v.Body.(*dnsmessage.PTRResource)
-					ans = append(ans, body.PTR.String())
-				}
-				if len(ans) > 0 {
-					wlog.Debugf("PTRSource PutWgvpnResource, question=%v answer=%v", question.Name.String(), ans)
-					err := s.opt.aHookAction(ans)
-					if err != nil {
-						log.Errorf("PTRSourcehookaction PutWgvpnResource error, question=%v,ans=%v,err=%v", question.Name.String(), ans, err)
-					}
-				}
-			} else {
-				blog.Debugf("PTRSource response, question=%v answer=%v", question.Name.String(), body.PTR.String())
-			}
-		case *dnsmessage.AAAAResource:
-			body := answer.Body.(*dnsmessage.AAAAResource)
-			log.Debugf("AAAAResource response, question=%+v answer=%v", question.Name.String(), printByteSlice(body.AAAA[:]))
-			if s.filterDomin(printByteSlice(body.AAAA[:])) {
-				fmt.Fprint(os.Stdout, printByteSlice(body.AAAA[:])+"\n")
-				for _, v := range answers {
-					body = v.Body.(*dnsmessage.AAAAResource)
-					ans = append(ans, printByteSlice(body.AAAA[:]))
-				}
-				if len(ans) > 0 {
-					wlog.Debugf("AAAASource PutWgvpnResource, question=%v answer=%v", question.Name.String(), ans)
-					err := s.opt.aHookAction(ans)
-					if err != nil {
-						log.Errorf("AAAASourcehookaction PutWgvpnResource error, question=%v,ans=%v,err=%v", question.Name.String(), ans, err)
-					}
-				}
-			} else {
-				blog.Debugf("AAAAResource response, question=%+v answer=%v", question.Name.String(), printByteSlice(body.AAAA[:]))
-			}
-
-		default:
-			log.Debugf("not support this type, dnsmessageType=%+v", t)
-		}
-
-	}
-
-}
-
 func (s *DNSService) checkQuestion(searchType string, question dnsmessage.Question, answers []dnsmessage.Resource) {
 	que := question.Name.String()
 	if strings.HasSuffix(que, ".") {
@@ -218,60 +125,58 @@ func (s *DNSService) checkQuestion(searchType string, question dnsmessage.Questi
 		log.Errorf("filterDomin error, question=%+v,que=%v, type=%v", question.Name.String(), que, searchType)
 		return
 	}
-	log.Errorf("filterDomin question=%+v,que=%v, type=%v", question.Name.String(), que, searchType)
+	log.Debugf("filterDomin question=%+v,que=%v, type=%v", question.Name.String(), que, searchType)
 	var ans []string
-	if len(answers) > 0 {
-		answer := answers[0]
-		switch t := answer.Body.(type) {
+	for _, answer := range answers {
+		switch typ := answer.Body.(type) {
 		case *dnsmessage.AResource:
 			body := answer.Body.(*dnsmessage.AResource)
 			log.Debugf("ARSource response, question=%v answer=%v", question.Name.String(), printByteSlice(body.A[:]))
-			for _, v := range answers {
-				body = v.Body.(*dnsmessage.AResource)
-				ans = append(ans, printByteSlice(body.A[:]))
+			fmt.Fprint(os.Stdout, body.GoString()+"\n")
+			if an, err := parseIP(printByteSlice(body.A[:])); err == nil {
+				ans = append(ans, an)
+			} else {
+				log.Errorf("ARSource err=%v", err)
 			}
-			if len(ans) > 0 {
-				wlog.Debugf("ARSource PutWgvpnResource, question=%v answer=%v", question.Name.String(), ans)
-				err := s.opt.aHookAction(ans)
-				if err != nil {
-					log.Errorf("ARSourcehookaction PutWgvpnResource error, question=%v,ans=%v,err=%v", question.Name.String(), ans, err)
-				}
-			}
-
 		case *dnsmessage.PTRResource:
 			body := answer.Body.(*dnsmessage.PTRResource)
 			log.Debugf("PTRResource response, question=%+v answer=%v", question.Name.String(), body.PTR.GoString())
 			fmt.Fprint(os.Stdout, body.PTR.String()+"\n")
-			for _, v := range answers {
-				body = v.Body.(*dnsmessage.PTRResource)
-				ans = append(ans, body.PTR.String())
-			}
-			if len(ans) > 0 {
-				wlog.Debugf("PTRSource PutWgvpnResource, question=%v answer=%v", question.Name.String(), ans)
-				err := s.opt.aHookAction(ans)
-				if err != nil {
-					log.Errorf("PTRSourcehookaction PutWgvpnResource error, question=%v,ans=%v,err=%v", question.Name.String(), ans, err)
-				}
+			if an, err := parseIP(body.PTR.String()); err == nil {
+				ans = append(ans, an)
+			} else {
+				log.Errorf("PTRResource err=%v", err)
 			}
 		case *dnsmessage.AAAAResource:
 			body := answer.Body.(*dnsmessage.AAAAResource)
 			log.Debugf("AAAAResource response, question=%+v answer=%v", question.Name.String(), printByteSlice(body.AAAA[:]))
 			fmt.Fprint(os.Stdout, printByteSlice(body.AAAA[:])+"\n")
-			for _, v := range answers {
-				body = v.Body.(*dnsmessage.AAAAResource)
-				ans = append(ans, printByteSlice(body.AAAA[:]))
+			if an, err := parseIP(printByteSlice(body.AAAA[:])); err == nil {
+				ans = append(ans, an)
+			} else {
+				log.Errorf("AAAAResource err=%v", err)
 			}
-			if len(ans) > 0 {
-				wlog.Debugf("AAAASource PutWgvpnResource, question=%v answer=%v", question.Name.String(), ans)
-				err := s.opt.aHookAction(ans)
-				if err != nil {
-					log.Errorf("AAAASourcehookaction PutWgvpnResource error, question=%v,ans=%v,err=%v", question.Name.String(), ans, err)
-				}
-			}
+		case *dnsmessage.CNAMEResource:
+			body := answer.Body.(*dnsmessage.CNAMEResource)
+			log.Debugf("CNAMEResource response, question=%+v answer=%v", question.Name.String(), body.CNAME.GoString())
+			// fmt.Fprint(os.Stdout, body.CNAME.String()+"\n")
+			// if an, err := parseIP(body.CNAME.String()); err == nil {
+			// 	ans = append(ans, an)
+			// } else {
+			// 	log.Errorf("CNAMEResource err=%v", err)
+			// }
 		default:
-			log.Debugf("not support this type, dnsmessageType=%+v", t)
+			log.Debugf("not support this type, dnsmessageType=%+v", typ)
 		}
 
+	}
+	if len(ans) > 0 {
+		wlog.Debugf("question=%v answer=%v", question.Name.String(), ans)
+		err := s.opt.hookAction(ans)
+		if err != nil {
+			log.Errorf("PutWgvpnResource error, question=%v,ans=%v,err=%v", question.Name.String(), ans, err)
+			fmt.Fprintf(os.Stdout, fmt.Sprintf("PutWgvpnResource error, question=%v,ans=%v,err=%v\n\n", question.Name.String(), ans, err))
+		}
 	}
 }
 func (s *DNSService) Query(p Packet) {
@@ -279,7 +184,7 @@ func (s *DNSService) Query(p Packet) {
 	if p.message.Header.Response {
 		pKey := pString(p)
 		if addrs, ok := s.memo.get(pKey); ok {
-			s.checkQuestion("forward", p.message.Questions[0], p.message.Answers)
+			go s.checkQuestion("forward", p.message.Questions[0], p.message.Answers)
 			for _, addr := range addrs {
 				go sendPacket(s.conn, p.message, addr)
 			}
@@ -295,7 +200,7 @@ func (s *DNSService) Query(p Packet) {
 	if ok {
 		p.message.Response = true
 		p.message.Answers = append(p.message.Answers, val...) //如果本地有缓存，则直接发送至client
-		s.checkQuestion("cache", q, p.message.Answers)
+		go s.checkQuestion("cache", q, p.message.Answers)
 		go sendPacket(s.conn, p.message, p.addr)
 	} else {
 		for i := 0; i < len(s.forwarders); i++ { //如果本地没有，直接转发包至顶级域名递归查询

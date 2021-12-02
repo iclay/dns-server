@@ -16,43 +16,6 @@ type RestService struct {
 	Dn *DNSService
 }
 
-// // Add a SRV record
-// curl -X POST \
-//   http://localhost/dns \
-//   -H 'Content-Type: application/json' \
-//   -d '{
-// 	"Host": "_sip._tcp.example.com.",
-// 	"TTL": 300,
-// 	"Type": "SRV",
-// 	"SRV": {
-// 		"Priority": 0,
-// 		"Weight": 5,
-// 		"Port": 5060,
-// 		"Target": "sipserver.example.com."
-// 	}
-// }'
-
-// // Update an A record from 124.108.115.87 to 127.0.0.1
-// curl -X PUT \
-//   http://localhost/dns \
-//   -H 'Content-Type: application/json' \
-//   -d '{
-// 	"Host": "example.com.",
-// 	"TTL": 600,
-// 	"Type": "A",
-// 	"OldData": "124.108.115.87",
-// 	"Data": "127.0.0.1"
-// }'
-
-// // Delete a record
-// curl -X DELETE \
-//   http://localhost/dns \
-//   -H 'Content-Type: application/json' \
-//   -d '{
-// 	"Host": "example.com.",
-// 	"Type": "A"
-// }'
-
 type request struct {
 	Host    string
 	TTL     uint32

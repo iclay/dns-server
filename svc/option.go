@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
 type action func([]string) error
@@ -13,11 +15,28 @@ type Options struct {
 	ptrHookAction  action
 	aaaaHookAction action
 	aHookAction    action
+	hookAction     action
 	whitelistMap   wbmap
 	blacklistMap   wbmap
 }
 
 type Option func(opts *Options)
+
+func registerSingal(fns ...func()) {
+	c := make(chan os.Signal)
+	signal.Notify(c, syscall.SIGUSR1)
+	go func() {
+		for {
+			select {
+			case <-c:
+				fmt.Fprint(os.Stdout, "now reload whitelist or blacklist\n")
+				for _, fn := range fns {
+					fn()
+				}
+			}
+		}
+	}()
+}
 
 func WithPTRHookAction(fn action) Option {
 	return func(opts *Options) {
@@ -37,11 +56,22 @@ func WithAHookAction(fn action) Option {
 	}
 }
 
+func WithHookAction(fn action) Option {
+	return func(opts *Options) {
+		opts.hookAction = fn
+	}
+}
+
 func WithSaveBList(blist string) Option {
 	return func(opts *Options) {
 		opts.blacklistMap = make(wbmap)
 		opts.blacklistMap.saveCache(blist)
-		fmt.Fprint(os.Stdout, opts.blacklistMap)
+		go registerSingal(func() {
+			opts.blacklistMap.clear()
+			opts.blacklistMap.saveCache(blist)
+			fmt.Fprint(os.Stdout, fmt.Sprintf("reload blacklist_map=%+v\n", opts.blacklistMap))
+		})
+		fmt.Fprint(os.Stdout, fmt.Sprintf("blacklist_map=%+v\n", opts.blacklistMap))
 	}
 }
 
@@ -49,7 +79,14 @@ func WithSaveWList(wlist string) Option {
 	return func(opts *Options) {
 		opts.whitelistMap = make(wbmap)
 		opts.whitelistMap.saveCache(wlist)
-		fmt.Fprint(os.Stdout, opts.whitelistMap)
+		go registerSingal(func() {
+			opts.whitelistMap.clear()
+			opts.whitelistMap.saveCache(wlist)
+			fmt.Fprint(os.Stdout, fmt.Sprintf("reload whitelist_map=%+v\n", opts.whitelistMap))
+
+		})
+		fmt.Fprint(os.Stdout, fmt.Sprintf("white_listmap=%+v\n", opts.whitelistMap))
+
 	}
 }
 func WithSaveBWList(blist, wlist string) Option {
@@ -58,7 +95,14 @@ func WithSaveBWList(blist, wlist string) Option {
 		opts.whitelistMap = make(wbmap)
 		opts.blacklistMap.saveCache(blist)
 		opts.whitelistMap.saveCache(wlist)
-		fmt.Fprint(os.Stdout, opts.blacklistMap, opts.whitelistMap)
+		go registerSingal(func() {
+			opts.blacklistMap.clear()
+			opts.whitelistMap.clear()
+			opts.blacklistMap.saveCache(blist)
+			opts.whitelistMap.saveCache(wlist)
+			fmt.Fprint(os.Stdout, fmt.Sprintf("reload whitelist_map=%+v, blacklist_map=%+v\n", opts.whitelistMap, opts.blacklistMap))
+		})
+		fmt.Fprint(os.Stdout, fmt.Sprintf("whitelist_map=%+v, blacklist_map=%+v\n", opts.whitelistMap, opts.blacklistMap))
 	}
 }
 
@@ -107,5 +151,11 @@ func (wb wbmap) saveCache(dir string) {
 				wb[domain] = struct{}{}
 			}
 		}
+	}
+}
+
+func (wb wbmap) clear() {
+	for k, _ := range wb {
+		delete(wb, k)
 	}
 }
